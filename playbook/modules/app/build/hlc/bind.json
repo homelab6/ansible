@@ -1,5 +1,5 @@
 {
-  "repo": "git@gitlab.com:cloud4583526/bind.git",
+  "repo": "git@github.com:homelab6/bind.git",
   "package": "cloud/bind:1",
   "host": "prd-hs-host001.hlc.homelab6.com"
 }

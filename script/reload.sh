@@ -2,7 +2,7 @@
 
 rm -rf /mnt/config/ansible/*
 
-git clone --single-branch --branch develop-config git@gitlab.com:cloud4583526/ansible.git /mnt/config/ansible/
+git clone --single-branch --branch develop-config git@github.com:homelab6/ansible.git /mnt/config/ansible/
 
 rm -rf /mnt/config/ansible/.git
 

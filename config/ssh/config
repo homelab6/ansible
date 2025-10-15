@@ -2,9 +2,9 @@
 StrictHostKeyChecking=accept-new
 PreferredAuthentications publickey
 
-# gitlab.com
-Host gitlab.com
-  IdentityFile /mnt/secrets/gitlab_ed25519
+# github.com
+Host github.com
+  IdentityFile /mnt/secrets/github_ed25519
 
 # hlc.homelab6.com
 Host *.hlc.homelab6.com
