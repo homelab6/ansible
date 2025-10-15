@@ -1,0 +1,50 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "app", "action": "build", "app": "hlc/bind"}'
+
+- name: check if app is defined
+  assert:
+    that:
+      - app is defined
+    fail_msg: "'app' is not defined"
+
+- name: load app build config
+  include_vars:
+    file: modules/app/build/{{ app }}.json
+    name: build
+
+- name: check if build.repo is defined
+  assert:
+    that:
+      - build.repo is defined
+    fail_msg: "'build.repo' is not defined"
+
+- name: check if build.package is defined
+  assert:
+    that:
+      - build.package is defined
+    fail_msg: "'build.package' is not defined"
+
+- name: set default build.branch
+  set_fact:
+    build: "{{ build | combine({'branch': 'develop'}) }}"
+  when: build.branch is not defined
+
+- name: check if build.host is defined
+  assert:
+    that:
+      - build.host is defined
+    fail_msg: "'build.host' is not defined"
+
+- name: clone on host
+  delegate_to: "{{ build.host }}"
+  shell: |
+    rm -rf /tmp/{{ app }}
+    mkdir -p /tmp/{{ app }}
+    git clone --single-branch --branch {{ build.branch }} {{ build.repo }} /tmp/{{ app }}
+
+- name: build on host
+  delegate_to: "{{ build.host }}"
+  become: yes
+  shell: |
+    cd /tmp/{{ app }}
+    docker buildx build . -t {{ build.package }}
+    rm -rf /tmp/{{ app }}

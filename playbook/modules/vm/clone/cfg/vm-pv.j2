@@ -1,0 +1,13 @@
+name='{{ dstHost }}'
+type='pv'
+
+memory=4096
+vcpus=8
+
+kernel = '/usr/local/lib/xen/bin/grub-x86_64-xen'
+
+vif=['']
+
+disk=[
+      'phy:/dev/domu/{{ dstHost }},xvda,w'
+     ]

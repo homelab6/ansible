@@ -1,0 +1,53 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "vm", "action": "dump", "hosts": ["dev-vm-develop001.hlc.homelab6.com"]}'
+
+- name: default args / vars
+  set_fact:
+    vg      : "domu"
+    type    : "pv"
+    srcHost : "dev-vm-almalinux.hlc.homelab6.com"
+#   dstHost : ""  #dump to this host
+    boot    : true
+    typeList: ["hvm", "pv"]
+
+
+- name: check if vm type is valid
+  assert:
+    that:
+      - type in typeList
+    fail_msg: "clone type '{{ type }}' is not in {{ typeList }}"
+
+- name: find srcHost disk size
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    lvdisplay /dev/{{ vg }}/{{ srcHost }} | grep "LV Size"
+  register: diskSize
+
+- name: extract srcHost disk size
+  set_fact:
+    srcHostDiskSize: "{{ diskSize.stdout.split()[-2:] | join() }}"
+  when: diskSize.rc == 0
+
+- name: dd srcHost lv to dstHost lv
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    dd if=/dev/{{ vg }}/{{ srcHost }} of=/dev/{{ vg }}/{{ host }} status=progress
+
+- name: boot dstHost vm
+  include_tasks: modules/runcommands/boot-vm.yml
+
+- name: ssh dstHost
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    hostnamectl hostname {{ host }}
+
+    rm -f /etc/machine-id
+    dbus-uuidgen --ensure=/etc/machine-id
+
+    dnf upgrade -y --security
+
+- name: shutdown dstHost
+  include_tasks: modules/runcommands/shutdown-vm.yml
+  when: not boot | bool

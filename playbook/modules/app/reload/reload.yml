@@ -1,0 +1,4 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "app", "action": "reload", "app": "hlc/bind", "hosts": ["prd-hs-host001.hlc.homelab6.com"]}'
+
+- name: reload app
+  include_tasks: modules/app/reload/{{ app }}.yml

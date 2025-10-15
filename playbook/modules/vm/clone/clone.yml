@@ -1,0 +1,114 @@
+---
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "vm", "action": "clone", "hosts": ["dev-vm-develop001.hlc.homelab6.com"]}'
+
+- name: default args / vars
+  vars:
+    vg      : "domu"
+    type    : "pv"
+    srcHost : "dev-vm-almalinux.hlc.homelab6.com"
+    boot    : true
+    typeList: ["hvm", "pv"]
+
+
+  tasks:
+    - name: check if clone type is valid
+      assert:
+        that:
+          - type in typeList
+        fail_msg: "clone type '{{ type }}' is not in {{ typeList }}"
+
+    - name: find srcHost disk size
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        lvdisplay /dev/{{ vg }}/{{ srcHost }} | grep "LV Size"
+      register: diskSize
+
+    - name: extract srcHost disk size
+      set_fact:
+        srcHostDiskSize: "{{ diskSize.stdout.split()[-2:] | join() }}"
+      when: diskSize.rc == 0
+
+    - name: create dstHost lv
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        lvcreate -y -n {{ host }} -L {{ srcHostDiskSize }} {{ vg }}
+      ignore_errors: true
+
+    - name: dd srcHost to dstHost lv
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        dd if=/dev/{{ vg }}/{{ srcHost }} of=/dev/{{ vg }}/{{ host }} status=progress
+
+    - name: create dstHost cfg file
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      template:
+        src: "modules/vm/clone/cfg/vm-{{ type }}.j2"
+        dest: "/etc/xen/vm/hlc/{{ host }}.cfg"
+        owner: user
+        group: user
+
+    - name: boot dstHost vm
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl create /etc/xen/vm/hlc/{{ host }}.cfg
+
+    - name: find mac addr of the vm
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl network-list {{ host }} | head -2 | tail -1 | awk -F" " '{ print $3 }'
+      register: findMACAddr
+
+    - name: extract mac addr
+      set_fact:
+        macAddr: "{{ findMACAddr.stdout }}"
+
+    - name: update dstHost cfg with mac addr
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        sed -i "/vif=\['/c\vif=\['mac={{ macAddr }}'\]" /etc/xen/vm/hlc/{{ host }}.cfg
+
+    - name: find ip addr of dstHost
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl reboot {{ host }}; tcpdump -n -i enp2s0f1 ether src {{ macAddr }} -c 50 | grep -m 1 "ARP, Request who-has" | awk -F" " '{ print $7 }' | awk -F"," '{ print $1 }'
+      register: findIPAddr
+
+    - name: extract ip addr
+      set_fact:
+        ipAddr: "{{ findIPAddr.stdout }}"
+
+    - name: ssh dstHost
+      delegate_to: "{{ ipAddr }}"
+      become: yes
+      shell: |
+        hostnamectl hostname {{ host }}
+
+        rm -f /etc/machine-id
+        dbus-uuidgen --ensure=/etc/machine-id
+
+        dnf upgrade -y --security
+
+    - name: poweroff dstHost
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl shutdown `xl domid {{ host }}`
+      when: not boot | bool
+
+    - name: update dstHost on router
+      debug:
+        msg:
+          - "reserve {{ ipAddr }} on router for {{ host }}"
+
+    - name: update dstHost on internal DNS
+      debug:
+        msg:
+          - "update internal DNS for {{ host }}: {{ ipAddr }}"

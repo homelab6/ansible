@@ -1,0 +1,5 @@
+- name: reload bind
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    docker container exec `docker container ls -a | grep cloud/bind | head -1 | awk -F" " '{ print $1 }'` ./reload.sh

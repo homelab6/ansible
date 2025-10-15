@@ -1,0 +1,5 @@
+- name: reboot vm
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    xl reboot {{ host }}

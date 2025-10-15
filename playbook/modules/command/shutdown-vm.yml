@@ -1,0 +1,9 @@
+- name: shutdown vm
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    xl shutdown {{ host }}
+
+- name: pause for 30 seconds
+  pause:
+    seconds: 30

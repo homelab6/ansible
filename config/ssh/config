@@ -1,0 +1,15 @@
+#ForwardAgent yes
+StrictHostKeyChecking=accept-new
+PreferredAuthentications publickey
+
+# gitlab.com
+Host gitlab.com
+  IdentityFile /mnt/secrets/gitlab_ed25519
+
+# hlc.homelab6.com
+Host *.hlc.homelab6.com
+  IdentityFile /mnt/secrets/hlc_ed25519
+
+# others
+Host *
+  IdentityFile /mnt/secrets/hlc_ed25519

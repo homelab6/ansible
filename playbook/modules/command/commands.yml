@@ -1,0 +1,27 @@
+- name: define commands
+  set_fact:
+#    commands: "uptime"
+    commands: |
+      echo 'hello world' &&
+      uptime
+#    commands:
+#      - 'echo "hello world"'
+#      - "uptime"
+
+- name: commands (string)
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    {{ commands }}
+  when:
+    - commands is string
+
+- name: commands (array)
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    {{ item }}
+  with_items: "{{ commands }}"
+  when:
+    - commands is not string
+    - commands is not mapping

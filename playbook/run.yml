@@ -1,0 +1,93 @@
+---
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "docker", "action": "setup", args..., "hosts": "hs"}'
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "docker", "action": "setup", args..., "hosts": ["dev-vm-test001.hlc.homelab6.com", "dev-vm-develop001.hlc.homelab6.com"]}'
+- name: run.yml
+  hosts: localhost
+  gather_facts: no
+  vars:
+    hosts: ["localhost"]
+
+
+  tasks:
+    - name: check if hosts is defined
+      assert:
+        that:
+          - hosts is defined
+          - hosts is not mapping
+        fail_msg: "'hosts' is not defined"
+
+    - name: check if module is defined
+      assert:
+        that:
+          - module is defined
+        fail_msg: "'module' is not defined"
+
+    - name: check if action is defined
+      assert:
+        that:
+          - action is defined
+        fail_msg: "'action' is not defined"
+
+    - name: check if action file exists
+      stat:
+        path: modules/{{ module }}/{{ action }}.yml
+      register: action_file
+
+    - name: check if hosts is defined in inventory
+      assert:
+        that:
+          - groups["{{ hosts }}"] is defined
+        fail_msg: "{{ hosts }} is not defined in inventory"
+      when:
+        - hosts is string
+
+    - name: expand hosts if defined in inventory
+      set_fact:
+        hostsExp: "{{ groups[hosts] }}"
+      when:
+        - hosts is string
+        - groups["{{ hosts }}"] is defined
+
+    - name: copy hosts to hostsArr
+      set_fact:
+        hostsArr: "{{ hosts }}"
+      when:
+        - hosts is not string
+
+
+    - name: run.yml (hosts is in inventory)
+      include_tasks: modules/{{ module }}/{{ action }}.yml
+      loop: "{{ hostsExp }}"
+      loop_control:
+        loop_var: host
+      when:
+        - hostsExp is defined
+        - action_file.stat.exists
+
+    - name: run.yml
+      include_tasks: modules/{{ module }}/{{ action }}.yml
+      loop: "{{ hostsArr }}"
+      loop_control:
+        loop_var: host
+      when:
+        - hostsArr is defined
+        - action_file.stat.exists
+
+
+    - name: run.yml (hosts is in inventory)
+      include_tasks: modules/{{ module }}/{{ action }}/{{ action }}.yml
+      loop: "{{ hostsExp }}"
+      loop_control:
+        loop_var: host
+      when:
+        - hostsExp is defined
+        - not action_file.stat.exists
+
+    - name: run.yml
+      include_tasks: modules/{{ module }}/{{ action }}/{{ action }}.yml
+      loop: "{{ hostsArr }}"
+      loop_control:
+        loop_var: host
+      when:
+        - hostsArr is defined
+        - not action_file.stat.exists

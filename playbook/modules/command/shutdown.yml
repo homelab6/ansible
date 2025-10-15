@@ -1,0 +1,5 @@
+- name: shutdown hs
+  delegate_to: "{{ host }}"
+  become: yes
+  community.general.shutdown:
+    delay: 0

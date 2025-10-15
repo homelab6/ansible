@@ -1,0 +1,19 @@
+services:
+  ansible:
+    image: cloud/ansible:1
+    container_name: ansible001
+    volumes:
+      - /mnt/secrets/launchpad:/home/user/secrets:ro
+      - /run/media/user/en/secrets:/mnt/secrets-store
+    tmpfs:
+      - /mnt
+    networks:
+      - ansible_br
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+networks:
+  ansible_br:
+    external: true

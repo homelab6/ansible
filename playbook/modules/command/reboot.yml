@@ -1,0 +1,9 @@
+- name: reboot hs
+  delegate_to: "{{ host }}"
+  become: yes
+  reboot:
+    msg: "rebooting {{ host }}"
+    reboot_timeout: 600
+    pre_reboot_delay: 5
+    post_reboot_delay: 10
+    test_command: uptime

@@ -1,0 +1,54 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "app", "action": "deploy", "app": "hlc/bind"}'
+
+- name: check if app is defined
+  assert:
+    that:
+      - app is defined
+    fail_msg: "'app' is not defined"
+
+- name: load app deploy config
+  include_vars:
+    file: modules/app/deploy/{{ app }}.json
+    name: deploy
+
+- name: check if deploy.repo is defined
+  assert:
+    that:
+      - deploy.repo is defined
+    fail_msg: "'deploy.repo' is not defined"
+
+- name: check if deploy.stack is defined
+  assert:
+    that:
+      - deploy.stack is defined
+    fail_msg: "'deploy.stack' is not defined"
+
+- name: set default deploy.branch
+  set_fact:
+    deploy: "{{ deploy | combine({'branch': 'develop-config'}) }}"
+  when: deploy.branch is not defined
+
+- name: set default deploy.compose
+  set_fact:
+    deploy: "{{ deploy | combine({'compose': 'compose.yml'}) }}"
+  when: deploy.compose is not defined
+
+- name: set default deploy.host
+  set_fact:
+    deploy: "{{ deploy | combine({'host': 'prd-vm-dockeradmin001.hlc.homelab6.com'}) }}"
+  when: deploy.host is not defined
+
+- name: clone on host
+  delegate_to: "{{ deploy.host }}"
+  shell: |
+    rm -rf /tmp/{{ app }}
+    mkdir -p /tmp/{{ app }}
+    git clone --single-branch --branch {{ deploy.branch }} {{ deploy.repo }} /tmp/{{ app }}
+
+- name: deploy from host
+  delegate_to: "{{ deploy.host }}"
+  become: yes
+  shell: |
+    cd /tmp/{{ app }}
+    docker stack deploy -d -c {{ deploy.compose }} {{ deploy.stack }}
+    rm -rf /tmp/{{ app }}

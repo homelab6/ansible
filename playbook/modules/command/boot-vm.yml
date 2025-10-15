@@ -1,0 +1,9 @@
+- name: boot vm
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    xl create /etc/xen/vm/hlc/{{ host }}.cfg
+
+- name: pause for 60 seconds
+  pause:
+    seconds: 60

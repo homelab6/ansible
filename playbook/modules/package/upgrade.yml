@@ -1,0 +1,46 @@
+---
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "package", "action": "upgrade", "patch": "security", "packages": ["vim", "curl"], "reboot": "yes", "hosts": ["dev-vm-test001.hlc.homelab6.com"]}'
+
+- name: default args / vars
+  vars:
+#   patch : security/all
+    reboot: no
+
+  tasks:
+    - name: apply security patchs
+      delegate_to: "{{ host }}"
+      become: yes
+      shell: |
+        dnf upgrade -y --security
+      when:
+        - patch is defined
+        - patch == "security"
+
+    - name: apply all patchs
+      delegate_to: "{{ host }}"
+      become: yes
+      shell: |
+        dnf upgrade -y
+      when:
+        - patch is defined
+        - patch == "all"
+
+    - name: upgrade specific packages
+      delegate_to: "{{ host }}"
+      become: yes
+      shell: |
+        dnf upgrade -y {{ item }}
+      with_items: "{{ packages }}"
+      when:
+        - patch is not defined or patch != "all"
+        - packages is defined
+        - packages is iterable
+        - packages is not string
+        - packages is not mapping
+
+    - name: reboot host
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl reboot {{ host }}
+      when: reboot | bool

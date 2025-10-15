@@ -1,0 +1,21 @@
+name='{{ dstHost }}'
+type='hvm'
+
+memory=4096
+vcpus=8
+
+vif=['']
+
+disk=[
+      'phy:/dev/domu/{{ dstHost }},xvda,w'
+     ]
+
+#pci=['11:00.0','11:00.1']
+
+vga = "stdvga"
+videoram = 64
+
+vnc = 1
+vnclisten  = 'localhost'
+vncdisplay = 0
+vncpasswd  = '***'

@@ -1,0 +1,47 @@
+---
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "package", "action": "base/install", "hosts": ["dev-vm-test001.hlc.homelab6.com"]}'
+
+- name: install modules on host
+  vars:
+    reboot: no
+
+  tasks:
+    - name: install base packages
+      delegate_to: "{{ host }}"
+      become: yes
+      shell: |
+        dnf install -y epel-release
+        dnf config-manager --set-enabled crb
+
+        dnf install -y tar vim tree wget htop git \
+                       tcpdump net-tools \
+                       pciutils usbutils dbus-tools \
+                       dnf-automatic
+
+        dnf clean all
+
+    - name: create dnf automatic.conf
+      delegate_to: "{{ host }}"
+      become: yes
+      template:
+        src  : "modules/package/base/dnf/automatic-conf.j2"
+        dest : "/etc/dnf/automatic.conf"
+        owner: root
+        group: root
+
+    - name: start/restart dnf-automatic.timer
+      delegate_to: "{{ host }}"
+      become: yes
+      shell: |
+        systemctl enable --now dnf-automatic.timer
+        systemctl restart dnf-automatic.timer
+        systemctl list-timers *dnf-*
+
+        mkdir /mnt/secrets
+
+    - name: reboot host
+      delegate_to: prd-hs-compute001.hlc.homelab6.com
+      become: yes
+      shell: |
+        xl reboot {{ host }}
+      when: reboot | bool

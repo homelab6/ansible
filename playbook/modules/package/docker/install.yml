@@ -1,0 +1,56 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "package", "action": "docker/install", "hosts": ["dev-vm-test001.hlc.homelab6.com"]}'
+
+- name: default args / vars
+  set_fact:
+    groupid   : 666
+    daemonConf: "daemon.json.j2"
+    crontab   : "crontab.j2"
+    reboot    : no
+
+- name: install docker
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    groupmod -g {{ groupid }} docker
+
+- name: set daemon.json
+  delegate_to: "{{ host }}"
+  become: yes
+  template:
+    src : "modules/{{ module }}/docker/template/{{ daemonConf }}"
+    dest: "/etc/docker/daemon.json"
+
+- name: enable docker
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    systemctl enable --now docker
+
+    systemctl status docker
+    systemctl status containerd
+    systemctl status docker.socket
+
+- name: get crontab entry
+  delegate_to: "{{ host }}"
+  template:
+    src: "modules/{{ module }}/docker/template/{{ crontab }}"
+    dest: "/tmp/crontab-docker"
+
+- name: set crontab entry
+  delegate_to: "{{ host }}"
+  shell: |
+    crontab -l > /tmp/crontab-current
+    cat /tmp/crontab-docker >> /tmp/crontab-current
+    crontab /tmp/crontab-current
+
+    rm -f /tmp/crontab-current
+    rm -f /tmp/crontab-docker
+
+- name: reboot host
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    xl reboot {{ host }}
+  when: reboot | bool

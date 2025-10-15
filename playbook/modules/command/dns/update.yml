@@ -1,0 +1,40 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "command", "action": "dns/update", "ipv4": ["1.1.1.1", "9.9.9.9"], "hosts": ["prd-hs-host001.hlc.homelab6.com"]}'
+
+- name: check if ipv4 or ipv6 is defined
+  assert:
+    that:
+      - ipv4 is defined or ipv6 is defined
+    fail_msg: "'ipv4' or 'ipv6' is not defined"
+
+- name: set ipv4String from ipv4
+  set_fact:
+    ipv4String: "{{ ipv4 | join(' ') }}"
+  when:
+    - ipv4 is defined
+
+- name: set ipv6String from ipv6
+  set_fact:
+    ipv6String: "{{ ipv6 | join(' ') }}"
+  when:
+    - ipv6 is defined
+
+- name: update dns ipv4 for net- connections
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    nmcli connection show | tail -n +2 | awk -F" " '{ print $1 }' | grep "^net-" | xargs -I {} nmcli connection mod {} ipv4.dns "{{ ipv4String }}"
+  when: ipv4String is defined
+
+- name: update dns ipv6 for net- connections
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    nmcli connection show | tail -n +2 | awk -F" " '{ print $1 }' | grep "^net-" | xargs -I {} nmcli connection mod {} ipv6.dns "{{ ipv6String }}"
+  when: ipv6String is defined
+
+- name: restart NetworkManager
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    systemctl restart NetworkManager
+  when: ipv4String is defined or ipv6String is defined

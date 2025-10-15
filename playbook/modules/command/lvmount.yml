@@ -1,0 +1,166 @@
+#ansible-playbook -v -i env/inventory.ini run.yml -e '{"module": "command", "action": "lvmount", "mountPath": "/usr/share/ollama", "mod": "700", "lvname": "ollama", "size": "100GiB", "hosts": ["dev-vm-nvd4070llm.hlc.homelab6.com", "dev-vm-nvdv100llm.hlc.homelab6.com"]}'
+
+- name: mount lv
+  vars:
+    mod   : "755"
+    owner : "root"
+    group : "root"
+    size  : "5GiB"
+    fstype: "ext4"
+    vg    : "domu"
+    numchar: {"1": "a", "2": "b", "3": "c", "4": "d", "5": "e", "6": "f", "7": "g", "8": "h", "9": "i", "10": "j", "11": "k", "12": "l", "13": "m", "14": "n", "15": "o", "16": "p", "17": "q", "18": "r", "19": "s", "20": "t", "21": "u", "22": "v", "23": "w", "24": "x", "25": "y", "26": "z"}
+
+- name: check if mountPath is defined
+  assert:
+    that:
+      - mountPath is defined
+    fail_msg: "'mountPath' is not defined"
+
+- name: check if lvname is defined
+  assert:
+    that:
+      - lvname is defined
+    fail_msg: "'lvname' is not defined"
+
+- name: mountPath stats
+  delegate_to: "{{ host }}"
+  become: yes
+  stat:
+    path: "{{ mountPath }}"
+  register: dirStats
+
+- name: fail if mountPath is not a directory
+  assert:
+    that:
+      - dirStats.stat.isdir
+    fail_msg: "{{ mountPath }} is not a directory"
+  when:
+    - dirStats.stat.exists
+
+- name: check if mountPath is a directory
+  debug:
+    msg: "directory {{ mountPath }} exists"
+  when: dirStats.stat.exists and dirStats.stat.isdir
+
+- name: create directory mountPath
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    mkdir {{ mountPath }}
+    chmod {{ mod }} {{ mountPath }}
+    chown {{ owner }}:{{ group }} {{ mountPath }}
+  when: not dirStats.stat.exists
+
+
+- name: lvname stats
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  stat:
+    path: "/dev/domu/{{ host }}-{{ lvname }}"
+  register: lvnameStats
+
+- name: check if lvname is a blk device
+  assert:
+    that:
+      - lvnameStats.stat.isblk
+    msg: "lvname is not a blk device"
+  when:
+    - lvnameStats.stat.exists
+    - not lvnameStats.stat.islnk
+
+- name: lnkSource stats
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  stat:
+    path: "{{ lvnameStats.stat.lnk_source }}"
+  register: lnkSourceStats
+  when:
+    - lvnameStats.stat.exists
+    - lvnameStats.stat.islnk
+
+- name: check if lnkSource is a blk device
+  assert:
+    that:
+      - lnkSourceStats.stat.isblk
+    msg: "lnkSource is not a blk device"
+  when:
+    - lvnameStats.stat.exists
+    - lvnameStats.stat.islnk
+
+- name: create lvname
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    lvcreate -y -n {{ host }}-{{ lvname }} -L {{ size }} {{ vg }}
+    mkfs.{{ fstype }} /dev/domu/{{ host }}-{{ lvname }}
+  ignore_errors: true
+  when: not lvnameStats.stat.exists
+
+
+- name: count phy devices
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    grep "phy:" /etc/xen/vm/hlc/{{ host }}.cfg | wc -l
+  register: phyCountOP
+
+- name: extract grep count
+  set_fact:
+    phyCount: "{{ phyCountOP.stdout }}"
+
+- name: set phyCountNxt
+  set_fact:
+    phyCountNxt: "{{ phyCount | int + 1 }}"
+
+- name: set xvdStr
+  set_fact:
+    xvdStr: "xvd{{ numchar[ phyCount | string ] }}"
+
+- name: set xvdStrNxt
+  set_fact:
+    xvdStrNxt: "xvd{{ numchar[ phyCountNxt | string ] }}"
+
+- name: add mount to host.cfg
+  delegate_to: prd-hs-compute001.hlc.homelab6.com
+  become: yes
+  shell: |
+    sed -i "/{{ xvdStr }}/s/$/,\n      \'phy:\/dev\/domu\/{{ host }}-{{ lvname }},{{ xvdStrNxt }},w\'/" /etc/xen/vm/hlc/{{ host }}.cfg
+
+- name: shutdown vm host
+  include_tasks: modules/runcommands/shutdown-vm.yml
+
+- name: boot vm host
+  include_tasks: modules/runcommands/boot-vm.yml
+
+- name: get UUID of xvdStrNxt
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    lsblk -n --fs /dev/{{ xvdStrNxt }} -o UUID
+  register: uuidOP
+
+- name: set UUID
+  set_fact:
+    UUID: "{{ uuidOP.stdout }}"
+
+- name: get FSTYPE of xvdStrNxt
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    lsblk -n --fs /dev/{{ xvdStrNxt }} -o FSTYPE
+  register: fstypeOP
+
+- name: set FSTYPE
+  set_fact:
+    FSTYPE: "{{ fstypeOP.stdout }}"
+
+- name: update xvdStrNxt in fstab
+  delegate_to: "{{ host }}"
+  become: yes
+  shell: |
+    sed -i '$a\UUID\={{ UUID }} {{ mountPath + ' ' * ( 23 - mountPath | length ) }} {{ FSTYPE }}    defaults        0 0' /etc/fstab
+    systemctl daemon-reload
+    mount /dev/{{ xvdStrNxt }} {{ mountPath }}
+    rm -rf {{ mountPath }}/lost+found
+    chmod {{ mod }} {{ mountPath }}
+    chown {{ owner }}:{{ group }} {{ mountPath }}
