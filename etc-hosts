@@ -1,0 +1,13 @@
+
+### etc-hosts ###
+
+10.0.0.175  prd-hs-launchpad001.hlc.homelab6.com
+10.0.0.38   prd-hs-compute001.hlc.homelab6.com
+10.0.0.10   prd-hs-host001.hlc.homelab6.com
+
+10.0.0.61   prd-vm-dockeradmin001.hlc.homelab6.com
+
+10.0.0.192  dev-vm-almalinuxhvm.hlc.homelab6.com
+10.0.0.172  dev-vm-almalinux.hlc.homelab6.com
+10.0.0.102  dev-vm-develop001.hlc.homelab6.com
+10.0.0.218  dev-vm-test001.hlc.homelab6.com
